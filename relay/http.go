@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/influxdata/influxdb/models"
-	"github.com/vente-privee/influxdb-relay/config"
+	"github.com/techleadvn/influxdb-relay/config"
 )
 
 // HTTP is a relay for HTTP influxdb writes
@@ -284,6 +284,7 @@ func (s *simplePoster) post(buf []byte, query string, auth string, endpoint stri
 	}
 
 	resp, err := s.client.Do(req)
+
 	if err != nil {
 		return nil, err
 	}

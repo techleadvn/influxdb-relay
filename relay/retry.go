@@ -2,7 +2,9 @@ package relay
 
 import (
 	"bytes"
+	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -35,6 +37,8 @@ type retryBuffer struct {
 	list *bufferList
 
 	p poster
+
+	logger *log.Logger
 }
 
 func newRetryBuffer(size, batch int, max time.Duration, p poster) *retryBuffer {
@@ -46,6 +50,7 @@ func newRetryBuffer(size, batch int, max time.Duration, p poster) *retryBuffer {
 		maxBatch:        batch,
 		list:            newBufferList(size, batch),
 		p:               p,
+		logger: 		 log.New(os.Stdout, "retryBuffer", 0),
 	}
 	go r.run()
 	return r
@@ -63,6 +68,7 @@ func (r *retryBuffer) getStats() map[string]string {
 func (r *retryBuffer) post(buf []byte, query string, auth string, endpoint string) (*responseData, error) {
 	if atomic.LoadInt32(&r.buffering) == 0 {
 		resp, err := r.p.post(buf, query, auth, endpoint)
+
 		// TODO: A 5xx caused by the point data could cause the relay to buffer forever
 		if err == nil && resp.StatusCode/100 != 5 {
 			return resp, err
@@ -73,6 +79,7 @@ func (r *retryBuffer) post(buf []byte, query string, auth string, endpoint strin
 
 	// already buffering or failed request
 	_, err := r.list.add(buf, query, auth, endpoint)
+	r.logger.Printf("Add data to buffer, the size is %d", r.list.size)
 
 	// batch.wg.Wait()
 	// We do not wait for the WaitGroup because we don't want
@@ -85,6 +92,7 @@ func (r *retryBuffer) post(buf []byte, query string, auth string, endpoint strin
 func (r *retryBuffer) run() {
 	buf := bytes.NewBuffer(make([]byte, 0, r.maxBatch))
 	for {
+		r.logger.Printf("Next batch, current size is %d", r.list.size)
 		buf.Reset()
 		batch := r.list.pop()
 
@@ -197,8 +205,11 @@ func (l *bufferList) pop() *batch {
 	return b
 }
 
-func (l *bufferList) add(buf []byte, query string, auth string, endpoint string) (*batch, error) {
+func (l *bufferList) add(buffer []byte, query string, auth string, endpoint string) (*batch, error) {
 	l.cond.L.Lock()
+
+	var buf = make([]byte, len(buffer));
+	copy(buf, buffer)
 
 	if l.size+len(buf) > l.maxSize {
 		l.cond.L.Unlock()
@@ -233,6 +244,7 @@ func (l *bufferList) add(buf []byte, query string, auth string, endpoint string)
 	} else {
 		// append to current batch
 		b := *cur
+
 		b.size += len(buf)
 		b.bufs = append(b.bufs, buf)
 	}

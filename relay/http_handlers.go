@@ -338,12 +338,13 @@ func (h *HTTP) handleStandard(w http.ResponseWriter, r *http.Request, start time
 		putBuf(outBuf)
 	}()
 
+
 	var errResponse *responseData
+
 
 	w.Header().Set("Content-Type", "text/plain")
 
 	for resp := range responses {
-
 		switch resp.StatusCode / 100 {
 		case 2:
 			// Status accepted means buffering,
@@ -371,6 +372,7 @@ func (h *HTTP) handleStandard(w http.ResponseWriter, r *http.Request, start time
 	}
 
 	// No successful writes
+
 	if errResponse == nil {
 		// Failed to make any valid request...
 		jsonResponse(w, response{http.StatusServiceUnavailable, "unable to write points"})
